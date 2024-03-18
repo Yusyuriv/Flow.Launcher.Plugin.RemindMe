@@ -24,6 +24,7 @@
         <Content Include="plugin.json" CopyToOutputDirectory="Always" />
         <Content Include="icon.png" CopyToOutputDirectory="PreserveNewest" />
         <Content Include="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="THIRD-PARTY-LICENSES" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
     <ItemGroup>
