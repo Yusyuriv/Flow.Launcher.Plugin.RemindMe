@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net7.0-windows</TargetFramework>
+        <ProjectGuid>{522FAF05-36F4-4504-BFF6-5D8F8F4396D5}</ProjectGuid>
+        <AssemblyName>Flow.Launcher.Plugin.RemindMe</AssemblyName>
+        <PackageId>Flow.Launcher.Plugin.RemindMe</PackageId>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <UseWpf>true</UseWpf>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)'=='Release'">
+        <DebugSymbols>false</DebugSymbols>
+        <DebugType>None</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Content Include=".github/workflows/*" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <Content Include="plugin.json" CopyToOutputDirectory="Always" />
+        <Content Include="icon.png" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ChronicNetCore" Version="1.0.0" />
+        <PackageReference Include="Flow.Launcher.Plugin" Version="4.2.0"/>
+        <PackageReference Include="JetBrains.Annotations" Version="2023.3.0" PrivateAssets="All" />
+    </ItemGroup>
+
+</Project>

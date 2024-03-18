@@ -1,0 +1,34 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 7.x
+      - name: Get version
+        id: version
+        run: |
+          $version = (cat plugin.json | ConvertFrom-Json).Version
+          ac $env:GITHUB_OUTPUT "version=$version"
+      - name: Build
+        run: |
+          dotnet publish -c Release -o publish
+          rm publish/Flow.Launcher.Plugin.RemindMe.deps.json
+          7z a Flow.Launcher.Plugin.RemindMe.zip ./publish/*
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: Flow.Launcher.Plugin.RemindMe.zip
+          tag_name: v${{ steps.version.outputs.version }}
