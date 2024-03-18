@@ -2,6 +2,10 @@ name: Publish
 
 on:
   push:
+    paths-ignore:
+      - README.md
+      - .gitignore
+      - 'Screenshots/**'
     branches:
       - main
 
