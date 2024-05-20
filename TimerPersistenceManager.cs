@@ -7,7 +7,7 @@ namespace Flow.Launcher.Plugin.RemindMe;
 
 #nullable enable
 
-public static class TimerManager {
+public static class TimerPersistenceManager {
     private static string? SaveFileLocation {
         get {
             var location = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);

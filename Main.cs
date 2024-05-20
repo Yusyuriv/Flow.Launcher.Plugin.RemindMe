@@ -26,7 +26,7 @@ public class Main : IPlugin, ISettingProvider {
     public void Init(PluginInitContext context) {
         _context = context;
         _settings = _context.API.LoadSettingJsonStorage<Settings>();
-        _timers = TimerManager.ReadTimersFromFile() ?? new List<TimerState>();
+        _timers = TimerPersistenceManager.ReadTimersFromFile() ?? new List<TimerState>();
 
         var now = DateTime.Now;
         foreach (var timerState in _timers) {
@@ -40,7 +40,7 @@ public class Main : IPlugin, ISettingProvider {
 
                     ts.Timer.Dispose();
                     _timers.Remove(ts);
-                    TimerManager.WriteTimersToFile(_timers);
+                    TimerPersistenceManager.WriteTimersToFile(_timers);
                 }, timerState, timerState.DateTime - now, Timeout.InfiniteTimeSpan);
 
                 timerState.Timer = timer;
@@ -48,7 +48,7 @@ public class Main : IPlugin, ISettingProvider {
         }
 
         _timers = _timers.Where(v => v.DateTime > now).ToList();
-        TimerManager.WriteTimersToFile(_timers);
+        TimerPersistenceManager.WriteTimersToFile(_timers);
     }
 
     public List<Result> Query(Query query) {
@@ -155,7 +155,7 @@ public class Main : IPlugin, ISettingProvider {
                     Action = _ => {
                         v.Timer.Dispose();
                         _timers.Remove(v);
-                        TimerManager.WriteTimersToFile(_timers);
+                        TimerPersistenceManager.WriteTimersToFile(_timers);
 
                         if (_settings.ShowNotificationsOnAddAndDelete) {
                             var name = string.IsNullOrEmpty(v.Name) ? "" : $"{v.Name} ";
@@ -254,13 +254,13 @@ public class Main : IPlugin, ISettingProvider {
 
                 ts.Timer.Dispose();
                 _timers.Remove(ts);
-                TimerManager.WriteTimersToFile(_timers);
+                TimerPersistenceManager.WriteTimersToFile(_timers);
             }, timerState, delay, Timeout.InfiniteTimeSpan);
 
             timerState.Timer = timer;
 
             _timers.Add(timerState);
-            TimerManager.WriteTimersToFile(_timers);
+            TimerPersistenceManager.WriteTimersToFile(_timers);
 
             if (_settings.ShowNotificationsOnAddAndDelete) {
                 var prefix = string.IsNullOrEmpty(timerState.Name) ? "" : $"{timerState.Name} ";
