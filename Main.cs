@@ -10,28 +10,45 @@ using Flow.Launcher.Plugin.RemindMe.Views;
 
 namespace Flow.Launcher.Plugin.RemindMe;
 
-internal class TimerState {
-    public string Name { get; set; }
-    public DateTime DateTime { get; set; }
-    public Timer Timer { get; set; }
-}
-
 public class Main : IPlugin, ISettingProvider {
     private PluginInitContext _context;
     private Settings _settings;
 
-    private readonly List<TimerState> _timers = new();
+    private List<TimerState> _timers = null!;
 
     private const string IcoPath = "icon.png";
 
     private readonly Parser _parser = new(new Options {
         Context = Pointer.Type.Future,
-        FirstDayOfWeek = DayOfWeek.Monday
+        FirstDayOfWeek = DayOfWeek.Monday,
     });
 
     public void Init(PluginInitContext context) {
         _context = context;
         _settings = _context.API.LoadSettingJsonStorage<Settings>();
+        _timers = TimerManager.ReadTimersFromFile() ?? new List<TimerState>();
+
+        var now = DateTime.Now;
+        foreach (var timerState in _timers) {
+            if (timerState.DateTime <= now) {
+                ShowReminder(timerState);
+            } else {
+                var timer = new Timer(state => {
+                    if (state is not TimerState ts) return;
+
+                    ShowReminder(ts);
+
+                    ts.Timer.Dispose();
+                    _timers.Remove(ts);
+                    TimerManager.WriteTimersToFile(_timers);
+                }, timerState, timerState.DateTime - now, Timeout.InfiniteTimeSpan);
+
+                timerState.Timer = timer;
+            }
+        }
+
+        _timers = _timers.Where(v => v.DateTime > now).ToList();
+        TimerManager.WriteTimersToFile(_timers);
     }
 
     public List<Result> Query(Query query) {
@@ -42,7 +59,7 @@ public class Main : IPlugin, ISettingProvider {
             (>= 1, "add") => GetAddReminderResponse(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
             (>= 1, "list") => GetReminderList(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
             (1, { } s) => GetCommandList(query.ActionKeyword, s),
-            _ => new List<Result>()
+            _ => new List<Result>(),
         };
     }
 
@@ -55,18 +72,18 @@ public class Main : IPlugin, ISettingProvider {
             return new List<Result> {
                 new() {
                     Title = "Couldn't parse the time",
-                    IcoPath = IcoPath
+                    IcoPath = IcoPath,
                 }
             };
         }
-        
+
         if (string.IsNullOrEmpty(search)) {
             return new List<Result> {
                 new() {
                     Title = "in 5 minutes to go get some food",
                     SubTitle = """Type when to remind you, "to" and the name of the reminder""",
                     IcoPath = IcoPath,
-                    Action = CreatePutExamplePromptAction(queryKeyword)
+                    Action = CreatePutExamplePromptAction(queryKeyword),
                 },
             };
         }
@@ -74,7 +91,7 @@ public class Main : IPlugin, ISettingProvider {
             return new List<Result> {
                 new() {
                     Title = "Couldn't parse the time",
-                    IcoPath = IcoPath
+                    IcoPath = IcoPath,
                 }
             };
         }
@@ -85,7 +102,7 @@ public class Main : IPlugin, ISettingProvider {
                 Title = GetAddReminderTitle(reason, when),
                 SubTitle = "Press Enter to add this reminder",
                 IcoPath = IcoPath,
-                Action = CreateAddReminderAction(queryKeyword, reason, when)
+                Action = CreateAddReminderAction(queryKeyword, reason, when),
             }
         };
     }
@@ -94,7 +111,7 @@ public class Main : IPlugin, ISettingProvider {
         return _ => {
             var prefix = GetQueryKeywordPrefix(queryKeyword);
             _context.API.ChangeQuery($"{prefix}add in 5 minutes to go get some food", true);
-            
+
             return false;
         };
     }
@@ -102,14 +119,14 @@ public class Main : IPlugin, ISettingProvider {
     private static string GetAddReminderTitle(string reason, Span when) {
         return reason switch {
             null or "" => $"Add a reminder at {when.Start}",
-            _ => $"Add a reminder to {reason} at {when.Start}"
+            _ => $"Add a reminder to {reason} at {when.Start}",
         };
     }
 
     private static string GetReminderTitle(TimerState timerState) {
         return timerState.Name switch {
             null or "" => $"Reminder at {timerState.DateTime}",
-            _ => $"Reminder to {timerState.Name} at {timerState.DateTime}"
+            _ => $"Reminder to {timerState.Name} at {timerState.DateTime}",
         };
     }
 
@@ -119,7 +136,7 @@ public class Main : IPlugin, ISettingProvider {
                 new Result {
                     Title = "No active reminders",
                     IcoPath = IcoPath,
-                }
+                },
             };
         }
 
@@ -128,7 +145,7 @@ public class Main : IPlugin, ISettingProvider {
                 var title = GetReminderTitle(v);
                 var searchHighlight = search switch {
                     null or "" => new List<int>(),
-                    _ => _context.API.FuzzySearch(search, title).MatchData
+                    _ => _context.API.FuzzySearch(search, title).MatchData,
                 };
                 return new Result {
                     Title = title,
@@ -138,17 +155,18 @@ public class Main : IPlugin, ISettingProvider {
                     Action = _ => {
                         v.Timer.Dispose();
                         _timers.Remove(v);
-                        
+                        TimerManager.WriteTimersToFile(_timers);
+
                         if (_settings.ShowNotificationsOnAddAndDelete) {
                             var name = string.IsNullOrEmpty(v.Name) ? "" : $"{v.Name} ";
                             var time = v.DateTime.ToString(CultureInfo.CurrentCulture);
                             _context.API.ShowMsg("Reminder removed:", $"{name}at {time}", IcoPath);
                         }
-                        
+
                         _context.API.ChangeQuery(GetQueryKeywordPrefix(queryKeyword) + "list ", true);
 
                         return true;
-                    }
+                    },
                 };
             })
             .Where(v => string.IsNullOrEmpty(search) || v.TitleHighlightData.Count > 0)
@@ -169,7 +187,7 @@ public class Main : IPlugin, ISettingProvider {
                 TitleHighlightData = addSearch.MatchData,
                 SubTitle = "Add a new reminder",
                 IcoPath = IcoPath,
-                Action = CreateSelectCommandAction(queryKeyword, "add")
+                Action = CreateSelectCommandAction(queryKeyword, "add"),
             });
         }
 
@@ -179,7 +197,7 @@ public class Main : IPlugin, ISettingProvider {
                 TitleHighlightData = listSearch.MatchData,
                 SubTitle = "List all reminders",
                 IcoPath = IcoPath,
-                Action = CreateSelectCommandAction(queryKeyword, "list")
+                Action = CreateSelectCommandAction(queryKeyword, "list"),
             });
         }
 
@@ -193,12 +211,22 @@ public class Main : IPlugin, ISettingProvider {
 
         return "";
     }
-    
+
     private Func<ActionContext, bool> CreateSelectCommandAction(string queryKeyword, string command) {
         return _ => {
             _context.API.ChangeQuery(GetQueryKeywordPrefix(queryKeyword) + command + " ");
             return false;
         };
+    }
+
+    private void ShowReminder(TimerState ts) {
+        if (_settings.ShowReminderNotification) {
+            _context.API.ShowMsg($"Reminder: {ts.Name}", "at " + ts.DateTime.ToString(CultureInfo.CurrentCulture), IcoPath);
+        } else {
+            Application.Current.Dispatcher.Invoke(() => {
+                new NotificationWindow(ts.Name, ts.DateTime.ToString(CultureInfo.CurrentCulture)).Show();
+            });
+        }
     }
 
     private Func<ActionContext, bool> CreateAddReminderAction(string queryKeyword, string reason, Span when) {
@@ -217,26 +245,22 @@ public class Main : IPlugin, ISettingProvider {
             var timerState = new TimerState {
                 Name = reason,
                 Timer = null,
-                DateTime = start
+                DateTime = start,
             };
             var timer = new Timer(state => {
                 if (state is not TimerState ts) return;
 
-                if (_settings.ShowReminderNotification) {
-                    _context.API.ShowMsg($"Reminder: {ts.Name}", "at " + ts.DateTime.ToString(CultureInfo.CurrentCulture), IcoPath);
-                } else {
-                    Application.Current.Dispatcher.Invoke(() => {
-                        new NotificationWindow(ts.Name, ts.DateTime.ToString(CultureInfo.CurrentCulture)).Show();
-                    });
-                }
+                ShowReminder(ts);
 
                 ts.Timer.Dispose();
                 _timers.Remove(ts);
+                TimerManager.WriteTimersToFile(_timers);
             }, timerState, delay, Timeout.InfiniteTimeSpan);
 
             timerState.Timer = timer;
 
             _timers.Add(timerState);
+            TimerManager.WriteTimersToFile(_timers);
 
             if (_settings.ShowNotificationsOnAddAndDelete) {
                 var prefix = string.IsNullOrEmpty(timerState.Name) ? "" : $"{timerState.Name} ";
