@@ -29,7 +29,7 @@
 
     <ItemGroup>
         <PackageReference Include="ChronicNetCore" Version="1.0.0" />
-        <PackageReference Include="Flow.Launcher.Plugin" Version="4.2.0"/>
+        <PackageReference Include="Flow.Launcher.Plugin" Version="4.2.0" PrivateAssets="All" />
         <PackageReference Include="JetBrains.Annotations" Version="2023.3.0" PrivateAssets="All" />
     </ItemGroup>
 
