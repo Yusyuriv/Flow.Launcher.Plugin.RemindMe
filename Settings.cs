@@ -7,6 +7,7 @@ public class Settings : INotifyPropertyChanged {
     private bool _showReminderWindow;
     private bool _showReminderNotification = true;
     private bool _showNotificationsOnAddAndDelete = true;
+    private bool _acceptShortForm = false;
 
     public bool ShowReminderWindow {
         get => _showReminderWindow;
@@ -28,6 +29,14 @@ public class Settings : INotifyPropertyChanged {
         get => _showNotificationsOnAddAndDelete;
         set {
             _showNotificationsOnAddAndDelete = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AcceptShortForm {
+        get => _acceptShortForm;
+        set {
+            _acceptShortForm = value;
             OnPropertyChanged();
         }
     }

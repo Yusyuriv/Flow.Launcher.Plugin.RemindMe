@@ -6,14 +6,24 @@
              DataContext="{Binding RelativeSource={RelativeSource Self}, Path=Settings}" mc:Ignorable="d"
              d:DesignHeight="300" d:DesignWidth="300">
     <StackPanel Orientation="Vertical" Margin="70 10 30 10">
-        <CheckBox 
+        <CheckBox
             Content="Show notifications when adding or deleting reminders"
             Margin="0 0 0 32"
             IsChecked="{Binding ShowNotificationsOnAddAndDelete}"
         />
-        
+
         <TextBlock Text="How to show reminders:" />
         <RadioButton Content="Standard Windows notification" IsChecked="{Binding ShowReminderNotification}" />
         <RadioButton Content="Always-on-top window" IsChecked="{Binding ShowReminderWindow}" />
+
+        <CheckBox
+            Content="Also accept new reminders in short form"
+            Margin="0 32 0 0"
+            IsChecked="{Binding AcceptShortForm}"
+        />
+        <TextBlock
+            Text="If checked, will also accept reminders in the form of &quot;5m take the food out of the freezer&quot; in addition to &quot;add in 5 minutes to take the food out of the freezer&quot;"
+            FontSize="12"
+        />
     </StackPanel>
 </UserControl>

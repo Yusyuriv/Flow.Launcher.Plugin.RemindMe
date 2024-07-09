@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,13 +12,33 @@ using Flow.Launcher.Plugin.RemindMe.Views;
 
 namespace Flow.Launcher.Plugin.RemindMe;
 
-public class Main : IPlugin, ISettingProvider {
+public partial class Main : IPlugin, ISettingProvider {
     private PluginInitContext _context;
     private Settings _settings;
 
     private List<TimerState> _timers = null!;
 
     private const string IcoPath = "icon.png";
+
+    private readonly Regex _shortAddCommandRegex = ShortAddCommandRegex();
+
+    [StringSyntax(StringSyntaxAttribute.Regex)]
+    private const string TimeUnitPattern =
+        """
+        (?<start_whitespace>^|\s)
+        (?<sign>[+-]?)
+        (?<number>\d+)
+        (?<unit>
+            s|sec|second|seconds|
+            m|min|minute|minutes|
+            h|hr|hrs|hour|hours|
+            d|day|days|
+            w|wk|wks|week|weeks|
+            mo|mon|mth|mths|month|months|
+            y|yr|yrs|year|years
+        )
+        (?<end_whitespace>$|\s)
+        """;
 
     private readonly Parser _parser = new(new Options {
         Context = Pointer.Type.Future,
@@ -56,10 +78,59 @@ public class Main : IPlugin, ISettingProvider {
 
         return (query.SearchTerms.Length, command) switch {
             (0, _) => GetCommandList(query.ActionKeyword),
-            (>= 1, "add") => GetAddReminderResponse(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
-            (>= 1, "list") => GetReminderList(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
+            (>= 1, "add")
+                => GetAddReminderResponse(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
+            (>= 1, "list")
+                => GetReminderList(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
+            (>= 1, _)
+                when _settings.AcceptShortForm &&
+                     _shortAddCommandRegex.IsMatch(query.Search) &&
+                     !string.IsNullOrWhiteSpace(_shortAddCommandRegex.Replace(query.Search, ""))
+                => GetShortAddReminderResponse(query.ActionKeyword, query.Search),
             (1, { } s) => GetCommandList(query.ActionKeyword, s),
             _ => new List<Result>(),
+        };
+    }
+
+    private List<Result> GetShortAddReminderResponse(string queryKeyword, string querySearch) {
+        var when = DateTime.Now;
+
+        while (_shortAddCommandRegex.IsMatch(querySearch)) {
+            var match = _shortAddCommandRegex.Match(querySearch);
+            var startWhitespace = match.Groups["start_whitespace"].Value;
+            var sign = match.Groups["sign"].Value;
+            var number = int.Parse(match.Groups["number"].Value);
+            var unit = match.Groups["unit"].Value;
+            var endWhitespace = match.Groups["end_whitespace"].Value;
+
+            if (sign == "-") {
+                number *= -1;
+            }
+
+            when = unit switch {
+                "s" or "sec" or "second" or "seconds" => when.AddSeconds(number),
+                "m" or "min" or "minute" or "minutes" => when.AddMinutes(number),
+                "h" or "hr" or "hrs" or "hour" or "hours" => when.AddHours(number),
+                "d" or "day" or "days" => when.AddDays(number),
+                "w" or "wk" or "wks" or "week" or "weeks" => when.AddDays(number * 7),
+                "mo" or "mon" or "mth" or "mths" or "month" or "months" => when.AddMonths(number),
+                "y" or "yr" or "yrs" or "year" or "years" => when.AddYears(number),
+                _ => when,
+            };
+
+            querySearch = querySearch.Remove(match.Index + startWhitespace.Length, match.Length - startWhitespace.Length - endWhitespace.Length);
+        }
+
+        var reason = querySearch.Trim();
+        var whenSpan = new Span(when, when);
+
+        return new List<Result> {
+            new() {
+                Title = GetAddReminderTitle(reason, whenSpan),
+                SubTitle = "Press Enter to add this reminder",
+                IcoPath = IcoPath,
+                Action = CreateAddReminderAction(queryKeyword, reason, whenSpan),
+            },
         };
     }
 
@@ -73,7 +144,7 @@ public class Main : IPlugin, ISettingProvider {
                 new() {
                     Title = "Couldn't parse the time",
                     IcoPath = IcoPath,
-                }
+                },
             };
         }
 
@@ -97,13 +168,14 @@ public class Main : IPlugin, ISettingProvider {
         }
 
         var reason = split.Length > 1 ? split[1] : "";
+
         return new List<Result> {
             new() {
                 Title = GetAddReminderTitle(reason, when),
                 SubTitle = "Press Enter to add this reminder",
                 IcoPath = IcoPath,
                 Action = CreateAddReminderAction(queryKeyword, reason, when),
-            }
+            },
         };
     }
 
@@ -277,4 +349,7 @@ public class Main : IPlugin, ISettingProvider {
     public Control CreateSettingPanel() {
         return new SettingsControl(_settings);
     }
+
+    [GeneratedRegex(TimeUnitPattern, RegexOptions.IgnorePatternWhitespace)]
+    private static partial Regex ShortAddCommandRegex();
 }
