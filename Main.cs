@@ -21,6 +21,8 @@ public partial class Main : IPlugin, ISettingProvider {
     private const string IcoPath = "icon.png";
 
     private readonly Regex _shortAddCommandRegex = ShortAddCommandRegex();
+    private readonly Regex _shortTimeOfDayRegex = ShortTimeOfDayRegex();
+
 
     [StringSyntax(StringSyntaxAttribute.Regex)]
     private const string TimeUnitPattern =
@@ -39,6 +41,40 @@ public partial class Main : IPlugin, ISettingProvider {
         )
         (?<end_whitespace>$|\s)
         """;
+
+    [StringSyntax(StringSyntaxAttribute.Regex)]
+    private const string TimeOfDayPattern =
+        """
+        (?<start_whitespace>^|\s)
+        (?<time>
+            \d{1,2}:\d{2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?|
+            \d{1,2}\s*(?:a\.?m\.?|p\.?m\.?)
+        )
+        (?<end_whitespace>$|\s)
+        """;
+
+    private static readonly string[] TimeOfDayFormats24 = {
+        "H:mm",
+        "HH:mm",
+        "H:mm:ss",
+        "HH:mm:ss",
+    };
+
+    private static readonly string[] TimeOfDayFormats12 = {
+        "htt",
+        "h tt",
+        "hhtt",
+        "hh tt",
+        "h:mmtt",
+        "h:mm tt",
+        "hh:mmtt",
+        "hh:mm tt",
+        "h:mm:sstt",
+        "h:mm:ss tt",
+        "hh:mm:sstt",
+        "hh:mm:ss tt",
+    };
+
 
     private readonly Parser _parser = new(new Options {
         Context = Pointer.Type.Future,
@@ -84,19 +120,51 @@ public partial class Main : IPlugin, ISettingProvider {
                 => GetReminderList(query.ActionKeyword, string.Join(" ", query.SearchTerms[1..])),
             (>= 1, _)
                 when _settings.AcceptShortForm &&
-                     _shortAddCommandRegex.IsMatch(query.Search) &&
-                     !string.IsNullOrWhiteSpace(_shortAddCommandRegex.Replace(query.Search, ""))
-                => GetShortAddReminderResponse(query.ActionKeyword, query.Search),
+                     TryParseShortAdd(query.Search, out var when, out var reason)
+                => GetShortAddReminderResponse(query.ActionKeyword, reason, when),
+
             (1, { } s) => GetCommandList(query.ActionKeyword, s),
             _ => new List<Result>(),
         };
     }
 
-    private List<Result> GetShortAddReminderResponse(string queryKeyword, string querySearch) {
-        var when = DateTime.Now;
+    private List<Result> GetShortAddReminderResponse(string queryKeyword, string reason, Span when) {
+        return new List<Result> {
+            new() {
+                Title = GetAddReminderTitle(reason, when),
+                SubTitle = "Press Enter to add this reminder",
+                IcoPath = IcoPath,
+                Action = CreateAddReminderAction(queryKeyword, reason, when),
+            },
+        };
+    }
 
-        while (_shortAddCommandRegex.IsMatch(querySearch)) {
-            var match = _shortAddCommandRegex.Match(querySearch);
+    private bool TryParseShortAdd(string querySearch, out Span when, out string reason) {
+        if (TryParseRelativeShortAdd(querySearch, out when, out reason)) {
+            return true;
+        }
+
+        if (TryParseAbsoluteShortAdd(querySearch, out when, out reason)) {
+            return true;
+        }
+
+        when = null;
+        reason = "";
+        return false;
+    }
+
+    private bool TryParseRelativeShortAdd(string querySearch, out Span when, out string reason) {
+        when = null;
+        reason = "";
+        if (!_shortAddCommandRegex.IsMatch(querySearch)) {
+            return false;
+        }
+
+        var whenValue = DateTime.Now;
+        var workingSearch = querySearch;
+
+        while (_shortAddCommandRegex.IsMatch(workingSearch)) {
+            var match = _shortAddCommandRegex.Match(workingSearch);
             var startWhitespace = match.Groups["start_whitespace"].Value;
             var sign = match.Groups["sign"].Value;
             var number = int.Parse(match.Groups["number"].Value);
@@ -107,32 +175,77 @@ public partial class Main : IPlugin, ISettingProvider {
                 number *= -1;
             }
 
-            when = unit switch {
-                "s" or "sec" or "second" or "seconds" => when.AddSeconds(number),
-                "m" or "min" or "minute" or "minutes" => when.AddMinutes(number),
-                "h" or "hr" or "hrs" or "hour" or "hours" => when.AddHours(number),
-                "d" or "day" or "days" => when.AddDays(number),
-                "w" or "wk" or "wks" or "week" or "weeks" => when.AddDays(number * 7),
-                "mo" or "mon" or "mth" or "mths" or "month" or "months" => when.AddMonths(number),
-                "y" or "yr" or "yrs" or "year" or "years" => when.AddYears(number),
-                _ => when,
+            whenValue = unit switch {
+                "s" or "sec" or "second" or "seconds" => whenValue.AddSeconds(number),
+                "m" or "min" or "minute" or "minutes" => whenValue.AddMinutes(number),
+                "h" or "hr" or "hrs" or "hour" or "hours" => whenValue.AddHours(number),
+                "d" or "day" or "days" => whenValue.AddDays(number),
+                "w" or "wk" or "wks" or "week" or "weeks" => whenValue.AddDays(number * 7),
+                "mo" or "mon" or "mth" or "mths" or "month" or "months" => whenValue.AddMonths(number),
+                "y" or "yr" or "yrs" or "year" or "years" => whenValue.AddYears(number),
+                _ => whenValue,
             };
 
-            querySearch = querySearch.Remove(match.Index + startWhitespace.Length, match.Length - startWhitespace.Length - endWhitespace.Length);
+            workingSearch = workingSearch.Remove(match.Index + startWhitespace.Length, match.Length - startWhitespace.Length - endWhitespace.Length);
         }
 
-        var reason = querySearch.Trim();
-        var whenSpan = new Span(when, when);
+        reason = workingSearch.Trim();
+        if (string.IsNullOrWhiteSpace(reason)) {
+            return false;
+        }
 
-        return new List<Result> {
-            new() {
-                Title = GetAddReminderTitle(reason, whenSpan),
-                SubTitle = "Press Enter to add this reminder",
-                IcoPath = IcoPath,
-                Action = CreateAddReminderAction(queryKeyword, reason, whenSpan),
-            },
-        };
+        when = new Span(whenValue, whenValue);
+        return true;
     }
+
+    private bool TryParseAbsoluteShortAdd(string querySearch, out Span when, out string reason) {
+        when = null;
+        reason = "";
+        var match = _shortTimeOfDayRegex.Match(querySearch);
+        if (!match.Success) {
+            return false;
+        }
+
+        var timeText = match.Groups["time"].Value;
+        if (!TryParseTimeOfDay(timeText, out var parsedTimeOfDay)) {
+            return false;
+        }
+
+        var now = DateTime.Now;
+        var candidate = now.Date.Add(parsedTimeOfDay);
+        if (candidate < now) {
+            candidate = candidate.AddDays(1);
+        }
+
+        var startWhitespace = match.Groups["start_whitespace"].Value;
+        var endWhitespace = match.Groups["end_whitespace"].Value;
+        var remaining = querySearch.Remove(match.Index + startWhitespace.Length, match.Length - startWhitespace.Length - endWhitespace.Length);
+        reason = remaining.Trim();
+
+        if (string.IsNullOrWhiteSpace(reason)) {
+            return false;
+        }
+
+        when = new Span(candidate, candidate);
+        return true;
+    }
+
+    private static bool TryParseTimeOfDay(string timeText, out TimeSpan timeOfDay) {
+        var trimmed = timeText.Trim();
+        var normalized = trimmed.Replace(".", "", StringComparison.Ordinal);
+        var usesAmPm = normalized.Contains("am", StringComparison.OrdinalIgnoreCase) ||
+                       normalized.Contains("pm", StringComparison.OrdinalIgnoreCase);
+        var formats = usesAmPm ? TimeOfDayFormats12 : TimeOfDayFormats24;
+
+        if (DateTime.TryParseExact(normalized, formats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsed)) {
+            timeOfDay = parsed.TimeOfDay;
+            return true;
+        }
+
+        timeOfDay = TimeSpan.Zero;
+        return false;
+    }
+
 
     private List<Result> GetAddReminderResponse(string queryKeyword, string search) {
         var split = search.Split(" to ", 2);
@@ -352,4 +465,8 @@ public partial class Main : IPlugin, ISettingProvider {
 
     [GeneratedRegex(TimeUnitPattern, RegexOptions.IgnorePatternWhitespace)]
     private static partial Regex ShortAddCommandRegex();
+
+    [GeneratedRegex(TimeOfDayPattern, RegexOptions.IgnorePatternWhitespace | RegexOptions.IgnoreCase)]
+    private static partial Regex ShortTimeOfDayRegex();
 }
+

@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="Flow.Launcher.Plugin.RemindMe.Views.SettingsControl"
+<UserControl x:Class="Flow.Launcher.Plugin.RemindMe.Views.SettingsControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -22,7 +22,8 @@
             IsChecked="{Binding AcceptShortForm}"
         />
         <TextBlock
-            Text="If checked, will also accept reminders in the form of &quot;5m take the food out of the freezer&quot; in addition to &quot;add in 5 minutes to take the food out of the freezer&quot;"
+            Text="If checked, will also accept reminders like &quot;5m take the food out of the freezer&quot; or &quot;22:30 take the food out of the freezer&quot; in addition to &quot;add in 5 minutes to take the food out of the freezer&quot;"
+
             FontSize="12"
         />
     </StackPanel>
