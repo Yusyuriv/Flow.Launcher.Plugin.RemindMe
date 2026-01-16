@@ -19,6 +19,7 @@ public partial class Main : IPlugin, ISettingProvider {
     private List<TimerState> _timers = null!;
 
     private const string IcoPath = "icon.png";
+    private static readonly TimeSpan MaxTimerDelay = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
     private readonly Regex _shortAddCommandRegex = ShortAddCommandRegex();
     private readonly Regex _shortTimeOfDayRegex = ShortTimeOfDayRegex();
@@ -91,17 +92,7 @@ public partial class Main : IPlugin, ISettingProvider {
             if (timerState.DateTime <= now) {
                 ShowReminder(timerState);
             } else {
-                var timer = new Timer(state => {
-                    if (state is not TimerState ts) return;
-
-                    ShowReminder(ts);
-
-                    ts.Timer.Dispose();
-                    _timers.Remove(ts);
-                    TimerPersistenceManager.WriteTimersToFile(_timers);
-                }, timerState, timerState.DateTime - now, Timeout.InfiniteTimeSpan);
-
-                timerState.Timer = timer;
+                ScheduleTimer(timerState);
             }
         }
 
@@ -414,7 +405,37 @@ public partial class Main : IPlugin, ISettingProvider {
         }
     }
 
+    private void ScheduleTimer(TimerState timerState) {
+        var delay = timerState.DateTime - DateTime.Now;
+        if (delay <= TimeSpan.Zero) {
+            CompleteReminder(timerState);
+            return;
+        }
+
+        var dueTime = delay > MaxTimerDelay ? MaxTimerDelay : delay;
+        if (timerState.Timer == null) {
+            timerState.Timer = new Timer(ReminderTimerTick, timerState, dueTime, Timeout.InfiniteTimeSpan);
+            return;
+        }
+
+        timerState.Timer.Change(dueTime, Timeout.InfiniteTimeSpan);
+    }
+
+    private void ReminderTimerTick(object state) {
+        if (state is not TimerState timerState) return;
+        ScheduleTimer(timerState);
+    }
+
+    private void CompleteReminder(TimerState timerState) {
+        ShowReminder(timerState);
+
+        timerState.Timer?.Dispose();
+        _timers.Remove(timerState);
+        TimerPersistenceManager.WriteTimersToFile(_timers);
+    }
+
     private Func<ActionContext, bool> CreateAddReminderAction(string queryKeyword, string reason, Span when) {
+
         return _ => {
             if (when.Start is not { } start) {
                 _context.API.ShowMsg("Incorrect start time", "", IcoPath);
@@ -432,19 +453,9 @@ public partial class Main : IPlugin, ISettingProvider {
                 Timer = null,
                 DateTime = start,
             };
-            var timer = new Timer(state => {
-                if (state is not TimerState ts) return;
-
-                ShowReminder(ts);
-
-                ts.Timer.Dispose();
-                _timers.Remove(ts);
-                TimerPersistenceManager.WriteTimersToFile(_timers);
-            }, timerState, delay, Timeout.InfiniteTimeSpan);
-
-            timerState.Timer = timer;
 
             _timers.Add(timerState);
+            ScheduleTimer(timerState);
             TimerPersistenceManager.WriteTimersToFile(_timers);
 
             if (_settings.ShowNotificationsOnAddAndDelete) {
