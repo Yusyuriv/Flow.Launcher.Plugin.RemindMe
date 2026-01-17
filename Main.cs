@@ -400,7 +400,7 @@ public partial class Main : IPlugin, ISettingProvider {
             _context.API.ShowMsg($"Reminder: {ts.Name}", "at " + ts.DateTime.ToString(CultureInfo.CurrentCulture), IcoPath);
         } else {
             Application.Current.Dispatcher.Invoke(() => {
-                new NotificationWindow(ts.Name, ts.DateTime.ToString(CultureInfo.CurrentCulture)).Show();
+                new NotificationWindow(ts.Name, ts.DateTime.ToString(CultureInfo.CurrentCulture), _settings).Show();
             });
         }
     }

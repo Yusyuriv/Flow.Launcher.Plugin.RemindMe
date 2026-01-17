@@ -16,6 +16,25 @@
         <RadioButton Content="Standard Windows notification" IsChecked="{Binding ShowReminderNotification}" />
         <RadioButton Content="Always-on-top window" IsChecked="{Binding ShowReminderWindow}" />
 
+        <TextBlock Text="Always-on-top window settings:" Margin="0 24 0 8" />
+        <StackPanel Orientation="Vertical">
+            <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                <TextBlock Text="Window size" Width="160" VerticalAlignment="Center" />
+                <TextBox Width="80" Text="{Binding ReminderWindowWidth}" />
+                <TextBlock Text="x" Margin="6 0" VerticalAlignment="Center" />
+                <TextBox Width="80" Text="{Binding ReminderWindowHeight}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                <TextBlock Text="Header font size" Width="160" VerticalAlignment="Center" />
+                <TextBox Width="80" Text="{Binding ReminderWindowHeaderFontSize}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Date and time font size" Width="160" VerticalAlignment="Center" />
+                <TextBox Width="80" Text="{Binding ReminderWindowBodyFontSize}" />
+            </StackPanel>
+        </StackPanel>
+        <TextBlock Text="Set width/height to 0 for auto size." FontSize="12" Margin="0 4 0 0" />
+
         <CheckBox
             Content="Also accept new reminders in short form"
             Margin="0 32 0 0"
@@ -23,8 +42,8 @@
         />
         <TextBlock
             Text="If checked, will also accept reminders like &quot;5m take the food out of the freezer&quot; or &quot;22:30 take the food out of the freezer&quot; in addition to &quot;add in 5 minutes to take the food out of the freezer&quot;"
-
             FontSize="12"
+            TextWrapping="Wrap"
         />
     </StackPanel>
 </UserControl>
